@@ -1,0 +1,345 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+        <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
+        <title>Indicate Atlanta Map with Google Api</title>
+
+<style type="text/css">
+html, body, #map_canvas {
+  width:   750px;
+  height:  600px;
+  margin:  0;
+  padding: 0;
+}
+    .infowindow * {font-size: 90%; margin: 0; float: right}
+</style>
+
+        <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?v=3.exp&key=AIzaSyAUp8jbEBYbF8fEszgTtCJUowIrK6KKV3U">
+        </script>
+        <script type="text/javascript" src="http://geoxml3.googlecode.com/svn/branches/polys/geoxml3.js">
+        </script>
+        <script type="text/javascript" src="http://geoxml3.googlecode.com/svn/trunk/ProjectedOverlay.js">
+        </script>
+        <!-- GET couchdb-->
+        <script src="getCouchDB.js"></script>
+        <!-- ECHART-->
+        <script src="http://echarts.baidu.com/build/dist/echarts-all.js"></script> 
+        <script type="text/javascript">
+var geoXml = null;
+var geoXmlDoc = null;
+var map = null;
+var myLatLng = null;
+var myGeoXml3Zoom = true;
+var sidebarHtml = "";
+var infowindow = null;
+var filename = "http://arc.garc.opendata.arcgis.com/datasets/ad5209eef1e1460c9e39d4b0a8829c0a_65.kml";
+var cdata={};  
+
+      
+    function initialize() {
+
+
+       getJSON('http://115.146.93.74:5984/tweet_db/_design/testtopic/_view/districtnumber?group_level=1').then(function(data){
+        dealdata(data);
+        }, function(status) { //error detection....
+        alert('Something went wrong.');
+      });
+
+      // Map style
+      var styles = [
+    {
+      stylers: [
+        { hue: "#00ffe6" },
+        { saturation: -20 }
+      ]
+    },{
+      featureType: "road",
+      elementType: "geometry",
+      stylers: [
+        { lightness: 100 },
+        { visibility: "simplified" }
+      ]
+    },{
+      featureType: "road",
+      elementType: "labels",
+      stylers: [
+        { visibility: "off" }
+      ]
+    }
+  ];
+
+      var styledMap = new google.maps.StyledMapType(styles,{name: "Styled Map"}); 
+
+      myLatLng = new google.maps.LatLng(33.76666666666667,-84.41666666666667);
+      
+                var myOptions = {
+                    center: myLatLng,
+                    zoom: 12,
+                    mapTypeId: google.maps.MapTypeId.ROADMAP,
+                    mapTypeControlOptions: {mapTypeIds: [google.maps.MapTypeId.ROADMAP, 'map_style']}
+                };
+                map = new google.maps.Map(document.getElementById("map_canvas"),
+                      myOptions);
+                map.mapTypes.set('map_style', styledMap);
+                map.setMapTypeId('map_style');
+                //infowindow = new google.maps.InfoWindow({});
+
+   geoXml = new geoXML3.parser({
+                    map: map,
+                    //infoWindow: infowindow,
+                    singleInfoWindow: true,
+                    suppressInfoWindows: true,
+                    zoom: myGeoXml3Zoom,
+                    afterParse: useTheData
+                });
+                geoXml.parse(filename);
+
+    };
+
+function kmlPgClick(pm) {
+   if (geoXml.docs[0].placemarks[pm].polygon.getMap()) {
+      google.maps.event.trigger(geoXmlDoc.placemarks[pm].polygon,"click");
+   } else {
+      geoXmlDoc.placemarks[pm].polygon.setMap(map);
+      google.maps.event.trigger(geoXmlDoc.placemarks[pm].polygon,"click");
+   }
+}
+
+function kmlShowPlacemark(pm) {
+  if (geoXmlDoc.placemarks[pm].polygon) {
+    map.fitBounds(geoXmlDoc.placemarks[pm].polygon.bounds);
+  } else if (geoXmlDoc.placemarks[pm].polyline) {
+    map.fitBounds(geoXmlDoc.placemarks[pm].polyline.bounds);
+  } else if (geoXmlDoc.placemarks[pm].marker) {
+    map.setCenter(geoXmlDoc.placemarks[pm].marker.getPosition());
+  } 
+   
+   for (var i=0;i<geoXmlDoc.placemarks.length;i++) {
+     var placemark = geoXmlDoc.placemarks[i];
+     if (i == pm) {
+       if (placemark.polygon) placemark.polygon.setMap(map);
+       if (placemark.polyline) placemark.polyline.setMap(map);
+       if (placemark.marker) placemark.marker.setMap(map);
+     } else {
+       if (placemark.polygon) placemark.polygon.setMap(null);
+       if (placemark.polyline) placemark.polyline.setMap(null);
+       if (placemark.marker) placemark.marker.setMap(null);
+     }
+   }
+}
+
+var highlightOptions = {fillColor: "#A52A2A", strokeColor: "#000000", fillOpacity: 0.8, strokeWidth: 10};
+var highlightLineOptions = {strokeColor: "#FFFF00", strokeWidth: 10};
+function kmlHighlightPoly(pm) {
+   for (var i=0;i<geoXmlDoc.placemarks.length;i++) {
+     var placemark = geoXmlDoc.placemarks[i];
+     if (i == pm) {
+       if (placemark.polygon) placemark.polygon.setOptions(highlightOptions);
+       if (placemark.polyline) placemark.polyline.setOptions(highlightLineOptions);
+     } else {
+       if (placemark.polygon) placemark.polygon.setOptions(placemark.polygon.normalStyle);
+       if (placemark.polyline) placemark.polyline.setOptions(placemark.polyline.normalStyle);
+     }
+   }
+}
+function kmlUnHighlightPoly(pm) {
+   for (var i=0;i<geoXmlDoc.placemarks.length;i++) {
+     if (i == pm) {
+       var placemark = geoXmlDoc.placemarks[i];
+       if (placemark.polygon) placemark.polygon.setOptions(placemark.polygon.normalStyle);
+       if (placemark.polyline) placemark.polyline.setOptions(placemark.polyline.normalStyle);
+     }
+   }
+}
+
+
+function showAll() {
+   map.fitBounds(geoXmlDoc.bounds);
+   for (var i=0;i<geoXmlDoc.placemarks.length;i++) {
+     var placemark = geoXmlDoc.placemarks[i];
+     if (placemark.polygon) placemark.polygon.setMap(map);
+     if (placemark.polyline) placemark.polyline.setMap(map);
+     if (placemark.marker) placemark.marker.setMap(map);
+   }
+}
+
+function highlightPoly(poly, polynum) {
+  
+  google.maps.event.addListener(poly,"mouseover",function(event) {
+    if (poly instanceof google.maps.Polygon) {
+      poly.setOptions(highlightOptions);
+    } else if (poly instanceof google.maps.Polyline) {
+      poly.setOptions(highlightLineOptions);
+    };
+        
+  });
+  google.maps.event.addListener(poly,"mouseout",function() {
+    poly.setOptions(poly.normalStyle);
+    //remove detailed data from map
+    //infowindow.close();
+    //infowindow=null;
+  });
+
+  google.maps.event.addListener(poly,"click", function(event){
+    //trigger echart
+    //cdata.rows[polynum]
+    makebar();
+    //show detailed data 
+    makeInfoWidonwRight(event,poly,polynum);
+      
+  });
+}
+
+// == build sidebar to show detailss about each district
+function makeInfoWidonwRight(event,poly,pnum){
+  
+  var i=pnum+1;
+  var name="District #"+i;
+  //get data from couchdb
+  var totaltwitters=cdata.rows[pnum].value;
+  var contentstring="<table><tr><td>District Name: "+name+"</td></tr><tr><td>Total Twitters: "+ totaltwitters +"</td></tr></table>";    
+  infowindow = new google.maps.InfoWindow({content:contentstring, position: event.latLng});
+  infowindow.open(map);
+  
+}  
+
+
+function useTheData(doc){
+  var currentBounds = map.getBounds();
+  if (!currentBounds) currentBounds=new google.maps.LatLngBounds();
+
+  geoXmlDoc = doc[0];
+  for (var i = 0; i < geoXmlDoc.placemarks.length; i++) {
+
+    var placemark = geoXmlDoc.placemarks[i];
+    if (placemark.polygon) {
+
+      var normalStyle = {
+          strokeColor: placemark.polygon.get('strokeColor'),
+          strokeWeight: placemark.polygon.get('strokeWeight'),
+          strokeOpacity: placemark.polygon.get('strokeOpacity'),
+          fillColor: placemark.polygon.get('fillColor'),
+          fillOpacity: placemark.polygon.get('fillOpacity')
+          };
+      placemark.polygon.normalStyle = normalStyle;
+
+      highlightPoly(placemark.polygon, i);
+    }
+
+  }
+
+};
+            
+
+   function hide_kml(){
+
+            geoXml.hideDocument();  
+
+   }
+
+   function unhide_kml(){
+
+            geoXml.showDocument();  
+
+   }
+function reload_kml(){
+   geoXml.hideDocument();
+   delete geoXml;
+   geoXml = new geoXML3.parser({
+                    map: map,
+                    singleInfoWindow: true,
+                    afterParse: useTheData
+   });
+   geoXml.parse(filename); 
+
+}
+   function hide_markers_kml(){
+     for (var i=0;i<geoXmlDoc.markers.length;i++) {
+       geoXmlDoc.markers[i].setVisible(false);
+     }
+   }
+
+   function unhide_markers_kml(){
+     for (var i=0;i<geoXmlDoc.markers.length;i++) {
+       geoXmlDoc.markers[i].setVisible(true);
+     }
+   }
+   function hide_polys_kml(){
+     for (var i=0;i<geoXmlDoc.gpolylines.length;i++) {
+       geoXmlDoc.gpolylines[i].setMap(null);
+     }
+   }
+
+   function unhide_polys_kml(){
+     for (var i=0;i<geoXmlDoc.gpolylines.length;i++) {
+       geoXmlDoc.gpolylines[i].setMap(map);
+     }
+   }
+
+<!-- CODE FOR DEAL COUCHDB DATA-->
+function dealdata(data){
+  //== set json data to global
+ cdata=data;
+}
+
+<!-- CODE FOR ECHART -->
+
+function makebar(geodata){
+//PROCESS     
+  var myChart = echarts.init(document.getElementById('echart')); 
+        
+        var option = {
+            tooltip: {
+                show: true
+            },
+            legend: {
+                data:['销量']
+            },
+            xAxis : [
+                {
+                    type : 'category',
+                    data : ["衬衫","羊毛衫","雪纺衫","裤子","高跟鞋","袜子"]
+                }
+            ],
+            yAxis : [
+                {
+                    type : 'value'
+                }
+            ],
+            series : [
+                {
+                    "name":"销量",
+                    "type":"bar",
+                    "data":[5, 20, 40, 10, 10, 20]
+                }
+            ]
+        };
+        
+                // 为echarts对象加载数据 
+                myChart.setOption(option); 
+
+}
+        </script>
+    </head>
+<body onload="initialize()">
+
+  <button onclick="hide_kml();">hide</button>
+  <button onclick="unhide_kml();">unhide</button>
+
+<table style="width:100%;"><tr><td>
+        <div id="map_canvas">
+        </div>
+</td><td>
+<div id="sidebar" style="width:300px;height:400px; overflow:auto"></div>
+</td>
+</tr>
+<tr>
+<td>
+<div id="echart" style="height:400px;overflow:auto"></div>
+</td></tr>
+
+</table>
+    </body>
+</html>
